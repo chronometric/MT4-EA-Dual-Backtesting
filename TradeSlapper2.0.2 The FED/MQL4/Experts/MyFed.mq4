@@ -60,10 +60,11 @@ void SetBreakeven(int ticket)
 {
    if (OrderSelect(ticket, SELECT_BY_TICKET))
    {
-      double breakevenPrice = OrderOpenPrice() + (Breakeven_Point * Point);
+      double breakevenPrice;
       
       if (OrderType() == OP_BUY)
       {
+         breakevenPrice = OrderOpenPrice() + (Breakeven_Point * Point);
          if (Bid - OrderOpenPrice() >= Breakeven_Level * Point || Bid < breakevenPrice)
          {
             if (OrderStopLoss() < OrderOpenPrice() || Bid < breakevenPrice)
@@ -77,6 +78,7 @@ void SetBreakeven(int ticket)
       }
       else if (OrderType() == OP_SELL)
       {
+         breakevenPrice = OrderOpenPrice() - (Breakeven_Point * Point);
          if (OrderOpenPrice() - Ask >= Breakeven_Level * Point || Ask > breakevenPrice)
          {
             if (OrderStopLoss() > OrderOpenPrice() || Ask > breakevenPrice)
@@ -92,9 +94,9 @@ void SetBreakeven(int ticket)
 }
 
 //+------------------------------------------------------------------+
-//| Check if trading is allowed                                       |
+//| Check if sufficient margin is available                          |
 //+------------------------------------------------------------------+
-bool IsTradeAllowed()
+bool CheckMargin()
 {
    return (AccountFreeMarginCheck(Symbol(), OP_BUY, FixLot) > 0);
 }
@@ -116,22 +118,30 @@ void OnTick()
    double bid = NormalizeDouble(Bid, Digits);
    double stopLoss = 0;
    double takeProfit = 0;
+   double minStopLevel = MarketInfo(Symbol(), MODE_STOPLEVEL) * Point;
 
    // Determine stop loss and take profit levels ensuring they are valid
    if (rsiValue < 30)
    {
       stopLoss = ask - (Breakeven_Level * Point);
       takeProfit = ask + (RsiTP * Point);
+
+      // Ensure stop loss and take profit are beyond the minimum stop level
+      if ((ask - stopLoss) < minStopLevel)
+         stopLoss = ask - minStopLevel;
+      if ((takeProfit - ask) < minStopLevel)
+         takeProfit = ask + minStopLevel;
    }
    else if (rsiValue > 70)
    {
       stopLoss = bid + (Breakeven_Level * Point);
       takeProfit = bid - (RsiTP * Point);
-   }
 
-   if (Use_Amplitude)
-   {
-      rsiValue *= Amplitude;
+      // Ensure stop loss and take profit are beyond the minimum stop level
+      if ((stopLoss - bid) < minStopLevel)
+         stopLoss = bid + minStopLevel;
+      if ((bid - takeProfit) < minStopLevel)
+         takeProfit = bid - minStopLevel;
    }
 
    if (rsiValue < 30)
